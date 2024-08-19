@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Ahorcado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1f36;
+            color: #e0e0e0;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #21a179;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        #word {
+            font-size: 28px;
+            letter-spacing: 8px;
+            margin-bottom: 20px;
+            color: #21a179;
+        }
+
+        #letters {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .letter {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 2px solid #21a179;
+            cursor: pointer;
+            font-size: 18px;
+            color: #21a179;
+            transition: background-color 0.3s;
+        }
+
+        .letter:hover {
+            background-color: #21a179;
+            color: #1a1f36;
+        }
+
+        .letter.disabled {
+            background-color: #29335c;
+            border-color: #29335c;
+            cursor: not-allowed;
+            color: #555;
+        }
+
+        #hangman {
+            margin-bottom: 20px;
+            background-color: #1a1f36;
+            border: 2px solid #21a179;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #29335c;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            z-index: 1000;
+            max-width: 80%;
+        }
+
+        #popupMessage {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #21a179;
+        }
+
+        #resetButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #21a179;
+            color: #1a1f36;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        #resetButton:hover {
+            background-color: #17a563;
+        }
+
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+
+        @media (min-width: 600px) {
+            #word {
+                font-size: 36px;
+                letter-spacing: 15px;
+            }
+
+            .letter {
+                width: 40px;
+                height: 40px;
+                line-height: 40px;
+                font-size: 20px;
+            }
+
+            #popupMessage {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="hangman" width="200" height="200"></canvas>
+    <div id="word"></div>
+    <div id="letters"></div>
+
+    <div id="overlay"></div>
+    <div id="popup">
+        <div id="popupMessage"></div>
+        <button id="resetButton">Jugar de Nuevo</button>
+    </div>
+
+    <script>
+        const palabras = ["CASA", "TREN", "PECES", "VALLADOLID", "ORDENADOR"];
+        let palabraSeleccionada = '';
+        let palabraGuiones = '';
+        let intentos = 0;
+        const maxIntentos = 8;
+
+        const hangmanCanvas = document.getElementById("hangman");
+        const ctx = hangmanCanvas.getContext("2d");
+
+        const palabraDisplay = document.getElementById("word");
+        const letrasContainer = document.getElementById("letters");
+        const popup = document.getElementById("popup");
+        const popupMessage = document.getElementById("popupMessage");
+        const resetButton = document.getElementById("resetButton");
+        const overlay = document.getElementById("overlay");
+
+        function iniciarJuego() {
+            palabraSeleccionada = palabras[Math.floor(Math.random() * palabras.length)];
+            palabraGuiones = "_".repeat(palabraSeleccionada.length);
+            intentos = 0;
+            ocultarPopup();
+
+            actualizarPalabraDisplay();
+            generarBotonesLetras();
+            limpiarCanvas();
+        }
+
+        function actualizarPalabraDisplay() {
+            palabraDisplay.textContent = palabraGuiones.split("").join(" ");
+        }
+
+        function generarBotonesLetras() {
+            letrasContainer.innerHTML = '';
+            for (let i = 65; i <= 90; i++) {
+                const letra = String.fromCharCode(i);
+                const button = document.createElement("button");
+                button.textContent = letra;
+                button.classList.add("letter");
+                button.addEventListener("click", manejarLetraClick);
+                letrasContainer.appendChild(button);
+            }
+        }
+
+        function manejarLetraClick(event) {
+            const letra = event.target.textContent;
+            event.target.classList.add("disabled");
+            event.target.disabled = true;
+
+            if (palabraSeleccionada.includes(letra)) {
+                actualizarPalabraConLetra(letra);
+            } else {
+                intentos++;
+                dibujarAhorcado(intentos);
+            }
+
+            revisarEstadoJuego();
+        }
+
+        function actualizarPalabraConLetra(letra) {
+            let nuevaPalabraGuiones = '';
+            for (let i = 0; i < palabraSeleccionada.length; i++) {
+                if (palabraSeleccionada[i] === letra) {
+                    nuevaPalabraGuiones += letra;
+                } else {
+                    nuevaPalabraGuiones += palabraGuiones[i];
+                }
+            }
+            palabraGuiones = nuevaPalabraGuiones;
+            actualizarPalabraDisplay();
+        }
+
+        function revisarEstadoJuego() {
+            if (palabraGuiones === palabraSeleccionada) {
+                mostrarPopup("¡Ganaste!");
+            } else if (intentos >= maxIntentos) {
+                mostrarPopup(`Perdiste. La palabra era: ${palabraSeleccionada}`);
+            }
+        }
+
+        function mostrarPopup(mensaje) {
+            popupMessage.textContent = mensaje;
+            popup.style.display = "block";
+            overlay.style.display = "block";
+            document.querySelectorAll(".letter").forEach(button => {
+                button.disabled = true;
+                button.classList.add("disabled");
+            });
+        }
+
+        function ocultarPopup() {
+            popup.style.display = "none";
+            overlay.style.display = "none";
+        }
+
+        function limpiarCanvas() {
+            ctx.clearRect(0, 0, hangmanCanvas.width, hangmanCanvas.height);
+        }
+
+        function dibujarAhorcado(intentos) {
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#21a179';
+
+            if (intentos === 1) {
+                // Base
+                ctx.beginPath();
+                ctx.moveTo(10, 190);
+                ctx.lineTo(190, 190);
+                ctx.stroke();
+            } else if (intentos === 2) {
+                // Poste vertical
+                ctx.beginPath();
+                ctx.moveTo(50, 190);
+                ctx.lineTo(50, 10);
+                ctx.stroke();
+            } else if (intentos === 3) {
+                // Poste horizontal
+                ctx.beginPath();
+                ctx.moveTo(50, 10);
+                ctx.lineTo(150, 10);
+                ctx.stroke();
+            } else if (intentos === 4) {
+                // Cuerda
+                ctx.beginPath();
+                ctx.moveTo(150, 10);
+                ctx.lineTo(150, 40);
+                ctx.stroke();
+            } else if (intentos === 5) {
+                // Cabeza
+                ctx.beginPath();
+                ctx.arc(150, 60, 20, 0, Math.PI * 2);
+                ctx.stroke();
+            } else if (intentos === 6) {
+                // Cuerpo
+                ctx.beginPath();
+                ctx.moveTo(150, 80);
+                ctx.lineTo(150, 130);
+                ctx.stroke();
+            } else if (intentos === 7) {
+                // Brazo izquierdo
+                ctx.beginPath();
+                ctx.moveTo(150, 100);
+                ctx.lineTo(120, 90);
+                ctx.stroke();
+            } else if (intentos === 8) {
+                // Brazo derecho, Piernas
+                ctx.moveTo(150, 100);
+                ctx.lineTo(180, 90);
+                ctx.stroke();
+                ctx.moveTo(150, 130);
+                ctx.lineTo(120, 160);
+                ctx.stroke();
+                ctx.moveTo(150, 130);
+                ctx.lineTo(180, 160);
+                ctx.stroke();
+            }
+        }
+
+        resetButton.addEventListener("click", iniciarJuego);
+
+        iniciarJuego();
+    </script>
+</body>
+</html>
